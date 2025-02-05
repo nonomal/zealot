@@ -6,6 +6,26 @@ class ReleasePolicy < ApplicationPolicy
     true
   end
 
+  def new?
+    any_manage?
+  end
+
+  def create?
+    any_manage?
+  end
+
+  def edit?
+    any_manage?
+  end
+
+  def update?
+    any_manage?
+  end
+
+  def destroy?
+    any_manage?
+  end
+
   def auth?
     true
   end
@@ -14,5 +34,23 @@ class ReleasePolicy < ApplicationPolicy
     def resolve
       scope.all
     end
+  end
+
+  private
+
+  def enabled_auth?
+    record.channel.password.present?
+  end
+
+  def app_user?
+    guest_mode? || any_manage? || Collaborator.where(user: user, app: app).exists?
+  end
+
+  def any_manage?
+    manage? || manage?(app: app)
+  end
+
+  def app
+    @app ||= record.app
   end
 end

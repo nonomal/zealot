@@ -1,0 +1,75 @@
+ARG VARIANT=bookworm
+FROM mcr.microsoft.com/vscode/devcontainers/base:${VARIANT}
+
+# Update args in docker-compose.yaml to set the UID/GID of the "vscode" user.
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+RUN if [ "$USER_GID" != "$USER_UID" ] || [ "$USER_UID" != "1000" ]; then \
+      groupmod --gid $USER_GID vscode && \
+      usermod --uid $USER_UID --gid $USER_GID vscode && \
+      chmod -R $USER_UID:$USER_GID /home/vscode; \
+    fi
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+    debian-keyring debian-archive-keyring apt-transport-https \
+    build-essential gnupg2 tar git zsh libssl-dev zlib1g-dev libyaml-dev  \
+    imagemagick libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
+    tzdata \
+    vim git-lfs tig tmux
+
+# Install postgresql-client-16
+RUN curl -1sLf 'https://www.postgresql.org/media/keys/ACCC4CF8.asc' | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
+    echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y postgresql-client libpq-dev
+
+# Install caddy
+RUN curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg && \
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list && \
+    apt-get update && \
+    apt-get install -y caddy
+
+ENV ZEALOT_PATH=/workspace
+
+USER vscode
+
+# Install asdf, ruby (with YJIT enabled) and nodejs
+ARG RUBY_VERSION="3.3.5"
+ARG NODEJS_VERSION="20.17.0"
+LABEL zealot.containers.ruby="$RUBY_VERSION"
+LABEL zealot.containers.nodejs="$NODEJS_VERSION"
+
+ARG ASDF_DIR="/home/vscode/.asdf"
+ENV RUBY_YJIT_ENABLE=true
+ENV PATH "${ASDF_DIR}/bin:${ASDF_DIR}/shims:$PATH"
+RUN git clone --quiet https://github.com/asdf-vm/asdf.git ${ASDF_DIR} && \
+    echo ". ${ASDF_DIR}/asdf.sh" >> ~/.bashrc && \
+    sed -i -E "s/^plugins=\(.+\)$/plugins=(debian asdf git tmux npm yarn ruby gem bundler rails)/g" ~/.zshrc
+
+RUN asdf plugin add nodejs && \
+    asdf install nodejs $NODEJS_VERSION && \
+    asdf global nodejs ${NODEJS_VERSION}
+
+# Enable YJIT *NEED* Rust 1.58.0+
+RUN asdf plugin add rust && \
+    asdf install rust latest && \
+    asdf global rust latest
+
+RUN export RUBY_CONFIGURE_OPTS="--enable-yjit" && \
+    asdf plugin add ruby && \
+    asdf install ruby $RUBY_VERSION && \
+    asdf global ruby ${RUBY_VERSION}
+
+WORKDIR /workspace
+
+RUN gem install bundler foreman && \
+    npm install --global yarn sass esbuild
+
+COPY Gemfile Gemfile.lock package.json ./
+USER root
+RUN chmod a+w Gemfile.lock && mkdir node_modules && chown -R vscode:vscode /workspace
+USER vscode
+
+RUN bundle install && yarn install

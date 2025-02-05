@@ -49,8 +49,12 @@ Rails.application.configure do
   # Send deprecation notices to registered listeners.
   config.active_support.deprecation = :notify
 
+  config.logger = ActiveSupport::Logger.new(STDOUT)
+    .tap { |logger| logger.formatter = ::Logger::Formatter.new }
+    .then { |logger| ActiveSupport::TaggedLogging.new(logger) }
+
   # Prepend all log lines with the following tags.
-  config.log_tags = %i[request_id]
+  # config.log_tags = %i[request_id]
 
   # Use the lowest log level to ensure availability of diagnostic information
   # when problems arise.
@@ -61,15 +65,15 @@ Rails.application.configure do
 
   # Action Mailer
   config.action_mailer.delivery_method = :smtp
-
   config.action_mailer.smtp_settings = {
     address:              ENV['SMTP_ADDRESS'],
-    port:                 ENV['SMTP_PORT'],
+    port:                 ENV['SMTP_PORT'].to_i,
     domain:               ENV['SMTP_DOMAIN'] || ENV['ZEALOT_DOMAIN'],
     user_name:            ENV['SMTP_USERNAME'].presence,
     password:             ENV['SMTP_PASSWORD'].presence,
-    authentication:       ENV['SMTP_AUTH_METHOD'] == 'none' ? nil : ENV['SMTP_AUTH_METHOD'] || :plain,
-    enable_starttls_auto: ENV['SMTP_ENABLE_STARTTLS_AUTO'] || true,
+    authentication:       ENV['SMTP_AUTH_METHOD'] == 'none' ? nil : ENV['SMTP_AUTH_METHOD'].presence || 'plain',
+    enable_starttls:      ActiveModel::Type::Boolean.new.cast(ENV['SMTP_ENABLE_STARTTLS_AUTO']) ?
+                            :auto : ActiveModel::Type::Boolean.new.cast(ENV['SMTP_ENABLE_STARTTLS']),
     openssl_verify_mode:  ENV['SMTP_OPENSSL_VERIFY_MODE'],
   }
 

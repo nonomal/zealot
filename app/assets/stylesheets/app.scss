@@ -14,13 +14,13 @@ $ios-install-issue-color: rgb(245, 39, 90);
 }
 
 .widget-app {
+  @extend .mb-4;
+
   .app-icon {
     margin: 0 auto;
     padding: 3px;
-    width: 100px;
-
-    max-width: 120px;
-    max-height: 120px;
+    width: 120px;
+    height: 120px;
   }
 
   .profile-username {
@@ -29,7 +29,7 @@ $ios-install-issue-color: rgb(245, 39, 90);
   }
 
   .created-time {
-    font-size: 0.4em;
+    font-size: 0.7rem;
   }
 }
 
@@ -104,17 +104,17 @@ $ios-install-issue-color: rgb(245, 39, 90);
   }
 
   .app-name {
-    padding-top: 6px;
+    padding-top: 3px;
     padding-left: 60px;
   }
 
   .app-identifier {
-    padding-top:4px;
+    padding-top: 4px;
     color: #9f9f9f;
     font-size: 0.9em;
   }
 
-  .box-tools>.label {
+  .box-tools > .label {
     margin-right: 3px;
   }
 
@@ -134,8 +134,7 @@ $ios-install-issue-color: rgb(245, 39, 90);
   }
 
   .app-actions {
-    .ios-install-issues {
-      padding-top: 10px;
+    .ios-issues {
       font-size: 0.8em;
       color: $ios-install-issue-color;
 
@@ -146,10 +145,20 @@ $ios-install-issue-color: rgb(245, 39, 90);
       }
     }
   }
+
+  .action-buttons {
+    .btn {
+      margin-bottom: 10px;
+    }
+  }
 }
 
-.dark-mode {
+@include color-mode(dark) {
   .app-icon {
     background-color: #fff;
+  }
+
+  .text-primary {
+    color: #64adfb !important;
   }
 }
