@@ -2,14 +2,15 @@
 
 class AppsController < ApplicationController
   before_action :authenticate_user! unless Setting.guest_mode
-  before_action :set_app, only: %i[show edit update destroy]
+  before_action :set_app, only: %i[show edit update destroy new_owner update_owner]
   before_action :set_selected_schemes_and_channels, only: %i[edit]
   before_action :process_scheme_and_channel, only: %i[create]
+  before_action :set_owner, only: %i[ new_owner update_owner ]
 
   def index
     @title = t('.title')
-    @apps = App.all
-    authorize @apps
+    @apps = manage_user_or_guest_mode? ? App.all : current_user.apps.all
+    authorize @apps if @app.present?
   end
 
   def show
@@ -31,38 +32,78 @@ class AppsController < ApplicationController
   def create
     @app = App.new(app_params)
     authorize @app
-
     return render :new, status: :unprocessable_entity unless @app.save
 
-    @app.users << current_user
+    create_owner
     create_schemes_and_channels
-    redirect_to apps_path, notice: t('activerecord.success.create', key: "#{@app.name} #{t('apps.title')}")
+
+    flash.now.notice = t('activerecord.success.create', key: "#{@app.name} #{t('apps.title')}")
+    respond_to do |format|
+      format.html { redirect_to apps_path }
+      format.turbo_stream
+    end
   end
 
   def update
-    # if @schemes.empty? && @channels.empty?
-    #   flash[:alert] = t('apps.messages.failture.missing_schemes_and_channels')
-    #   return render :edit, status: :unprocessable_entity
-    # end
-
     @app.update(app_params)
-    redirect_to apps_path
+    respond_to do |format|
+      format.html { redirect_to apps_path }
+      format.turbo_stream
+    end
   end
 
   def destroy
     @app.destroy
-    destory_app_data
+    destroy_app_data
 
-    redirect_to apps_path, status: :see_other
+    respond_to do |format|
+      format.any { redirect_to apps_path }
+    end
+  end
+
+  def new_owner
+    @title = t('.title')
+  end
+
+  def update_owner
+    @title = t('apps.new_owner.title')
+    @previous_user = @collaborator.user
+    user_id = owner_params[:user_id]
+    if @previous_user.id == user_id.to_i
+      notice = t('activerecord.errors.messages.same_value', key: t('apps.new_owner.title'))
+      return redirect_to @collaborator.app, notice: notice, status: :see_other
+    end
+
+    new_owner = User.find(user_id)
+    if existed_collaborator = @app.collaborators.find_by(user: new_owner)
+      existed_collaborator.destroy
+    end
+
+    return render :new_owner, status: :unprocessable_entity unless @collaborator.update(user: new_owner)
+
+    notice = t('activerecord.success.update', key: t('apps.new_owner.title'))
+    flash.now.notice = notice
+    respond_to do |format|
+      format.html { redirect_to @app }
+      format.turbo_stream
+    end
   end
 
   private
 
-  def destory_app_data
+  def destroy_app_data
     require 'fileutils'
 
     app_binary_path = Rails.root.join('public', 'uploads', 'apps', "a#{@app.id}")
     FileUtils.rm_rf(app_binary_path) if Dir.exist?(app_binary_path)
+  end
+
+  def set_owner
+    @collaborator = @app.collaborators.find_by(owner: true)
+  end
+
+  def create_owner
+    @app.create_owner(current_user)
   end
 
   def create_schemes_and_channels
@@ -123,5 +164,9 @@ class AppsController < ApplicationController
 
   def render_not_found_entity_response(e)
     redirect_to apps_path, notice: t('apps.messages.failture.not_found_app', id: e.id)
+  end
+
+  def owner_params
+    params.require(:collaborator).permit(:user_id)
   end
 end

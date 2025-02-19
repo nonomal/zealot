@@ -5,15 +5,17 @@
 
   <h4>
     开源自部署持续集成一切跟应用有关事情，接入任意 CI 系统一切自动化处理，企业多年实战经验，独立部署提供企业打包分发流程、上传应用全套流程方案 En Taro Adun! 🖖
+    <br />
+    Continuous everything. Automate the lifecycle of your apps. Connect your CI to build in the cloud, test on thousands of real devices, distribute to beta testers and app stores. All in one place.
   </h4>
 
   <a href="https://github.com/tryzealot/zealot/blob/develop/CHANGELOG.md">
     <img alt="changelog" src="https://img.shields.io/github/v/release/tryzealot/zealot?include_prereleases">
   </a>
-  <a href="https://hub.docker.com/r/tryzealot/zealot/">
+  <a href="https://ghcr.io/tryzealot/zealot">
     <img alt="docker image" src="https://img.shields.io/docker/pulls/tryzealot/zealot.svg">
   </a>
-  <a href="https://t.me/tryzealot_lobby">
+  <a href="https://t.me/+csa3Y2KOx44wMGRl">
     <img alt="chat on telegram" src="https://img.shields.io/badge/chat-on%20telegram-important.svg">
   </a>
   <a title="Crowdin" target="_blank" href="https://crowdin.com/project/zealot"><img src="https://badges.crowdin.net/zealot/localized.svg"></a>
@@ -25,19 +27,17 @@
   </a>
 
   <div>
-    <a href="https://zealot.ews.im/#/en/deployment">Install</a> •
-    <a href="https://zealot.ews.im/#/en/configuration">Configuration</a> •
-    <a href="https://zealot.ews.im/#/en/api">REST API</a> •
-    <a href="https://zealot.ews.im/#/en/modules">SDK</a> •
-    <a href="https://zealot.ews.im/#/en/screenshot">Screenshots</a>
+    <a href="https://zealot.ews.im/docs/self-hosted">Install</a> •
+    <a href="https://zealot.ews.im/docs/developer-guide/api">REST API</a> •
+    <a href="https://zealot.ews.im/docs/developer-guide">Developer guide</a> •
+    <a href="https://zealot.ews.im/docs/user-guide">User guide</a>
   </div>
 
   <div>
-    <a href="https://zealot.ews.im/#/deployment">自部署</a> •
-    <a href="https://zealot.ews.im/#/configuration">配置</a> •
-    <a href="https://zealot.ews.im/#/api">REST API</a> •
-    <a href="https://zealot.ews.im/#/modules">SDK</a> •
-    <a href="https://zealot.ews.im/#/screenshot">功能截图</a>
+    <a href="https://zealot.ews.im/zh-Hans/docs/self-hosted">自部署</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/developer-guide/api">API 接口</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/developer-guide">开发者资源</a> •
+    <a href="https://zealot.ews.im/zh-Hans/docs/user-guide">用户使用手册</a>
   </div>
 </div>
 
@@ -46,22 +46,23 @@
 
 ## 特性
 
-- 🌏 **多平台应用支持**: macOS、iOS、甚至是 APK 和 AAB 格式的 Android 应用上传、安装（支持 ARM 的 macOS）和下载
-- 🗄 **多渠道分类管理**: Debug、AdHoc、Enterprise 还是 Android 应用渠道管理统统没问题
+- 🌏 **多平台应用托管**: macOS、iOS、Android（apk/aab）、Windows、Linux 泛平台
 - 📱 **测试设备一网打进**: 自动同步 iOS 测试设备信息，允许一键注册新设备到苹果开发者
 - 🧑‍💻 **丰富开发者套件**: 提供 REST API、[iOS][zealot-ios-sdk]、[Android][android-android-sdk] SDK 以及 [fastlane][fastlane-plugin-zealot] 自动化构建插件
 - 💥 **剖析应用内部的秘密**: 解读 iOS、Android 应用或 iOS 描述文件的元信息
 - 🚨 **内置多种事件通知**: 数据可自定义 Income WebHook 到任意通知服务
-- 🔑 **第三方登录**: 飞书、Gitlab、Google 和 LDAP 一键授权
+- 🗄 **多渠道分类管理**: 自由划分不同场景不同产品形态的应用渠道管理
+- 🎳 **多架构部署**: amd86/arm64 及各种部署方案应有尽有
+- 🔑 **第三方登录**: 飞书、Gitlab、Google、LDAP 和 OIDC 一键授权
 - 🌑 **黑暗模式**: 黑夜白昼自由切换
 
 ## 在线演示
 
-> **注意**: 数据每日都会重新初始化，不对用户上传的应用承担任何法律风险，后果自负！
+- 演示地址：https://tryzealot.ews.im
+- 中文账户: `cn_admin@zealot.com` / `ze@l0t`
+- English Account: `en_admin@zealot.com` / `ze@l0t`
 
-- 演示地址：https://tryzealot.ews.im/
-- 登录账户: `admin@zealot.com`
-- 登录密码：`ze@l0t`
+> **注意**: 演示服务中的数据每日都会重新初始化，不对用户上传的应用承担任何法律风险，后果自负！
 
 ## 开发统计
 
@@ -75,4 +76,4 @@
 [zealot-ios-sdk]: https://github.com/tryzealot/zealot-ios
 [android-android-sdk]: https://github.com/tryzealot/zealot-android
 [fastlane-plugin-zealot]: https://github.com/tryzealot/fastlane-plugin-zealot
-[mit-link]: https://github.com/tryzealot/zealot/blob/develop/CHANGELOG.md
+[mit-link]: https://github.com/tryzealot/zealot/blob/develop/LICENSE

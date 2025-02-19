@@ -2,16 +2,14 @@
 
 module AppsHelper
   def preset_schemes
-    schemes = Setting.preset_schemes
-    schemes = Setting.builtin_schemes if schemes.empty?
-    schemes
+    Setting.preset_schemes || Setting.builtin_schemes.values
   end
 
   def preset_channels
     Channel.device_types.values
   end
 
-  def app_channel_columns(schemes_total)
+  def app_scheme_columns(schemes_total)
     case schemes_total
     when 1 then 12
     when 2 then 6
@@ -21,10 +19,23 @@ module AppsHelper
 
   def app_icon(release, options = {})
     unless release&.icon && release.icon.file && release.icon.file.exists?
-      return image_tag('touch-icon.png', **options)
+      return image_tag('zealot-icon.png', **options)
     end
 
+    options[:data] ||= {}
+    options[:data][:release_id] ||= release.id
+    options[:data][:channel_id] ||= release.channel.slug
     image_tag(release.icon_url, **options)
+  end
+
+  def native_codes(release)
+    native_codes = release.native_codes
+    return if native_codes.blank?
+
+    count = native_codes.size
+    return t('releases.show.multi_native_codes') if count > 1
+    
+    native_codes[0]
   end
 
   def logged_in_or_without_auth?(release)
@@ -61,35 +72,47 @@ module AppsHelper
     end
   end
 
-  def release_type_url(release)
+  def release_type_url_builder(release)
     return unless release_type = release.release_type
     return if release_type.blank?
 
-    if params[:name] == release_type
-      release_type
+    title = release_type_name(release_type)
+    if params[:name] != release_type && user_signed_in_or_guest_mode?
+      link_to(title, friendly_channel_release_types_path(release.channel, name: release_type), data: { turbo: false })
     else
-      link_to(release_type, friendly_channel_release_types_path(release.channel, name: release_type))
+      title
     end
   end
 
   def channel_platform(channel)
     return channel.name if channel.name.downcase == channel.device_type.downcase
 
-    platform = device_name(channel.device_type)
-    channel.name == platform ? channel.name : "#{channel.name} (#{device_name(channel.device_type)})"
+    platform = platform_name(channel.device_type)
+    channel.name == platform ? channel.name : "#{channel.name} (#{platform_name(channel.device_type)})"
   end
 
-  def changelog_format(changelog, **options)
-    simple_format changelog, **options
+  def changelog_render(changelog, **options)
+    source = options.delete(:source) || :markdown
+    case source
+    when :markdown
+      content_tag(:div, **options) do
+        raw Kramdown::Document.new(changelog).to_html
+      end
+    else
+      simple_format changelog, **options
+    end
   end
 
   def app_qrcode_tag(release)
-    if Setting.site_appearance != 'auto'
-      return image_tag channel_release_qrcode_path(@release.channel, @release, size: :large, theme: Setting.site_appearance)
+    if current_user&.appearance != 'auto' || Setting.site_appearance != 'auto'
+      theme = current_user&.appearance || Setting.site_appearance
+      return image_tag channel_release_qrcode_path(@release.channel, @release,
+        size: :large, theme: theme)
     end
 
     content_tag(:picture) do
-      content_tag(:source, media: "(prefers-color-scheme: dark)", srcset: channel_release_qrcode_path(release.channel, release, size: :large, theme: :dark)) do
+      qrcode_uri = channel_release_qrcode_path(release.channel, release, size: :large, theme: :dark)
+      content_tag(:source, media: "(prefers-color-scheme: dark)",  srcset: qrcode_uri) do
         image_tag channel_release_qrcode_path(release.channel, release, size: :large)
       end
     end

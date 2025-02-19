@@ -2,8 +2,12 @@
 
 class MetadatumPolicy < ApplicationPolicy
 
-  def show?
-    guest_mode_or_signed_in?
+  def new?
+    user_signed_in?
+  end
+
+  def destroy?
+    user_signed_in?
   end
 
   class Scope < Scope

@@ -6,29 +6,27 @@ module SettingHelper
   REPO_URL = 'https://github.com/tryzealot/zealot'
 
   class_methods do
-    include ActionView::Helpers::TranslationHelper
-
     def builtin_schemes
       [
-        t('settings.preset_schemes.beta', default: nil),
-        t('settings.preset_schemes.adhoc', default: nil),
-        t('settings.preset_schemes.production', default: nil)
-      ].compact
+        I18n.t('settings.preset_schemes.beta', default: 'Beta'),
+        I18n.t('settings.preset_schemes.adhoc', default: 'AdHoc'),
+        I18n.t('settings.preset_schemes.production', default: 'Production')
+      ]
     end
 
     def builtin_roles
       {
-        user: t('settings.preset_role.user', default: nil),
-        developer: t('settings.preset_role.developer', default: nil),
-        admin: t('settings.preset_role.admin', default: nil)
+        member: I18n.t('settings.preset_role.member', default: 'Member'),
+        developer: I18n.t('settings.preset_role.developer', default: 'Developer'),
+        admin: I18n.t('settings.preset_role.admin', default: 'Admin')
       }
     end
 
     def builtin_appearances
       {
-        light: t('settings.theme_modes.light', default: 'light'),
-        dark: t('settings.theme_modes.dark', default: 'dark'),
-        auto: t('settings.theme_modes.auto', default: 'auto')
+        light: I18n.t('settings.site_appearance.light', default: 'light'),
+        dark: I18n.t('settings.site_appearance.dark', default: 'dark'),
+        auto: I18n.t('settings.site_appearance.auto', default: 'auto')
       }
     end
 
@@ -51,6 +49,10 @@ module SettingHelper
           }
         end
       end
+    end
+
+    def site_timezone
+      ENV['TIME_ZONE'] || Rails.configuration.time_zone
     end
 
     def need_restart?
@@ -95,6 +97,15 @@ module SettingHelper
 
     def default_domain
       site_https ? 'localhost' : "localhost:#{ENV['ZEALOT_PORT'] || 3000}"
+    end
+
+    def version_info(suffix: false)
+      version = Setting.version
+      docker_tag = ENV['DOCKER_TAG']
+      return "#{version}-dev" if Rails.env.development?
+      return version if !docker_tag.present? || !suffix
+
+      "#{version}-#{docker_tag}"
     end
   end
 end

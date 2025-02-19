@@ -13,12 +13,18 @@ class ReleasesController < ApplicationController
     end
 
     @release = @channel.releases.last
+    authorize @release, :show?
+
     @title = @release.app_name
     render :show
   end
 
   def show
     authorize @release
+
+    unless @release.custom_fields.is_a?(Array)
+      flash[:warn] = t('.custom_fields_invalid_json_format')
+    end
   end
 
   def new
@@ -56,7 +62,8 @@ class ReleasesController < ApplicationController
       return render :show, status: :unprocessable_entity
     end
 
-    redirect_to friendly_channel_release_path(@channel, @release), status: :see_other
+    back_url = params[:back_url] || friendly_channel_release_path(@channel, @release)
+    redirect_to back_url, status: :see_other
   end
 
   protected
@@ -85,7 +92,7 @@ class ReleasesController < ApplicationController
 
   def release_params
     params.require(:release).permit(
-      :file, :changelog, :release_type, :branch, :git_commit, :ci_url
+      :file, :changelog, :release_version, :build_version, :release_type, :branch, :git_commit, :ci_url
     )
   end
 
@@ -100,6 +107,9 @@ class ReleasesController < ApplicationController
       case e.model
       when 'Channel'
         @title = t('releases.messages.errors.not_found_app')
+        unless user_signed_in_or_guest_mode?
+          @link_title = @link_href = nil
+        end
       when 'Release'
         @title = t('releases.messages.errors.not_found_release')
         if (current_user || Setting.guest_mode)
@@ -113,6 +123,6 @@ class ReleasesController < ApplicationController
       end
     end
 
-    render :not_found, status: :not_found
+    render 'releases/not_found', status: :not_found
   end
 end
