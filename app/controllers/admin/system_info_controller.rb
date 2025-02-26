@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Admin::SystemInfoController < ApplicationController
-  VERSION_CHECK_URL = 'https://api.github.com/repos/tryzealot/zealot/releases/latest'
-
   FILE_PERMISSIONS = {
     app: [
       'log',
@@ -53,7 +51,6 @@ class Admin::SystemInfoController < ApplicationController
     set_server_info
     set_disk_volumes
     set_file_permissions
-    set_services
   end
 
   private
@@ -85,17 +82,9 @@ class Admin::SystemInfoController < ApplicationController
     @gems ||= Hash[Gem::Specification.map { |spec| [spec.name, spec.version.to_s] }].sort
   end
 
-  def set_services
-    @services ||= {
-      redis: HealthCheck::RedisHealthCheck.check,
-      database: HealthCheck::Utils.get_database_version.present?,
-      sidekiq: HealthCheck::SidekiqHealthCheck.check,
-    }
-  end
-
   def set_disk_volumes
-    @disks = ::Sys::Filesystem.mounts.each_with_object([]) do |mount, obj|
-      mount_options = mount.options.split(',').map(&:strip)
+    @disks = Sys::Filesystem.mounts.each_with_object([]) do |mount, obj|
+      # mount_options = mount.options.split(',').map(&:strip)
       # next if (EXCLUDED_MOUNT_OPTIONS & mount_options).any?
       next if (EXCLUDED_MOUNT_TYPES & [mount.mount_type]).any?
 
@@ -108,7 +97,7 @@ class Admin::SystemInfoController < ApplicationController
         obj.push(
           bytes_total: disk.bytes_total,
           bytes_used: disk.bytes_used,
-          mount_path: disk.path,
+          mount_path: disk.path&.force_encoding('UTF-8'),
           mount_options: mount.options,
           percent: percent,
           color: progress_color(percent)
@@ -124,14 +113,14 @@ class Admin::SystemInfoController < ApplicationController
 
     @server = {
       os_info: Etc.uname.values.join(' '),
+      pg_version: pg_version,
       ruby_version: RUBY_DESCRIPTION,
-      zealot_version: Setting.version,
       zealot_vcs_ref: Setting.vcs_ref,
       build_date: Setting.build_date,
       cpu: cpu&.length,
       memory: memory,
       diskspace: diskspace,
-      booted_at: Rails.application.config.booted_at
+      booted_at: Rails.application.config.booted_at.in_time_zone(current_user.timezone)
     }
   end
 
@@ -169,6 +158,13 @@ class Admin::SystemInfoController < ApplicationController
     }
   rescue
     @diskspace = nil
+  end
+
+  def pg_version
+    return false unless HealthCheck::Utils.get_database_version.present?
+
+    version = ActiveRecord::Base.connection.select_value("SELECT version()")
+    version.match(/^PostgreSQL\s((\d+[.]?)+)\s*/).try(:[], 1)
   end
 
   def percent(value, n)

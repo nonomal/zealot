@@ -1,7 +1,7 @@
 - content_for :title do
   = t('.title')
 
-.row.m-3
+.row.my-3
   .col-md-6.order-12.order-sm-1
     == render 'devise/shared/intro'
   .col-md-6.order-1.order-sm-12.mb-4
@@ -14,14 +14,8 @@
             = simple_form_for(resource, as: resource_name, url: confirmation_path(resource_name), html: { method: :post }) do |f|
               == render "devise/shared/error_messages", resource: resource
 
-              = f.input :email,
-                        required: true,
-                        autofocus: true,
-                        hint: '',
-                        value: (resource.pending_reconfirmation? ? resource.unconfirmed_email : resource.email),
-                        input_html: { autocomplete: 'email', class: 'form-control' }
-
-              = f.button :submit, t('.resend_confirmation_instructions'), class: 'btn-block'
+              = f.input :email, required: true, value: (resource.pending_reconfirmation? ? resource.unconfirmed_email : resource.email)
+              = f.button :submit, t('.resend_confirmation_instructions'), class: 'w-100'
 
           .auth-providers.col-md-6
             == render 'devise/shared/links'

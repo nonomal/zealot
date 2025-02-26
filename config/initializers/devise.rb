@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-Dir.glob(Rails.root.join('lib/omni_auth/strategies/**/*.rb')).each do |filename|
-  require_dependency filename
-end
-
 FEISHU_OMNIAUTH_SETUP = lambda do |env|
   env['omniauth.strategy'].options[:client_id] = Setting.feishu[:app_id]
   env['omniauth.strategy'].options[:client_secret] = Setting.feishu[:app_secret]
@@ -40,18 +36,29 @@ LDAP_OMNIAUTH_SETUP = lambda do |env|
   env['omniauth.strategy'].options[:uid] = Setting.ldap[:uid]
 end
 
-class TurboFailureApp < Devise::FailureApp
-  def respond
-    if request_format == :turbo_stream
-      redirect
-    else
-      super
-    end
-  end
+OIDC_OMNIAUTH_SETUP = lambda do |env|
+  issuer = URI.parse(Setting.oidc[:issuer_url])
+  scopes = Setting.oidc[:scope]&.split(',').map { |v| v.chomp.to_sym }
+  url_options = Setting.url_options
+  site_host = "#{url_options[:protocol]}#{url_options[:host]}"
 
-  def skip_format?
-    %w(html turbo_stream */*).include? request_format.to_s
-  end
+  env['omniauth.strategy'].options[:name] = Setting.oidc[:name]
+  env['omniauth.strategy'].options[:issuer] = Setting.oidc[:issuer_url]
+  env['omniauth.strategy'].options[:discovery] = Setting.oidc[:discovery]
+  env['omniauth.strategy'].options[:scope] = scopes
+  env['omniauth.strategy'].options[:response_type] = Setting.oidc[:response_type].to_sym
+  env['omniauth.strategy'].options[:uid_field] = Setting.oidc[:uid_field]
+  env['omniauth.strategy'].options[:client_options] = {
+    scheme: issuer.scheme,
+    port: issuer.port,
+    host: issuer.host,
+    identifier: Setting.oidc[:client_id],
+    secret: Setting.oidc[:client_secret],
+    authorization_endpoint: Setting.oidc[:auth_uri],
+    token_endpoint: Setting.oidc[:token_uri],
+    userinfo_endpoint: Setting.oidc[:userinfo_uri],
+    redirect_uri: "#{site_host}/users/auth/openid_connect/callback"
+  }
 end
 
 # Use this hook to configure devise mailer, warden hooks and so forth.
@@ -68,13 +75,15 @@ Devise.setup do |config|
   # Configure the e-mail address which will be shown in Devise::Mailer,
   # note that it will be overwritten if you use your own mailer class
   # with default "from" parameter.
-  # config.mailer_sender = 'no-reply@' + Setting.url_options[:host]
+  # config.mailer_sender = -> {
+  #   Setting.mailer_default_from || 'no-reply@' + Setting.url_options[:host]
+  # }
 
   # Configure the class responsible to send e-mails.
   config.mailer = 'DeviseMailer'
 
   # Configure the parent class responsible to send e-mails.
-  # config.parent_mailer = 'ActionMailer::Base'
+  config.parent_mailer = 'ApplicationMailer'
 
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
@@ -153,7 +162,7 @@ Devise.setup do |config|
   # config.reload_routes = true
 
   # ==> Configuration for :database_authenticatable
-  # For bcrypt, this is the cost for hashing the password and defaults to 11. If
+  # For bcrypt, this is the cost for hashing the password and defaults to 12. If
   # using other algorithms, it sets how many times you want the password to be hashed.
   #
   # Limiting the stretches to just one in testing will increase the performance of
@@ -304,11 +313,10 @@ Devise.setup do |config|
   # If you want to use other strategies, that are not supported by Devise, or
   # change the failure app, you can configure them inside the config.warden block.
   #
-  config.warden do |manager|
-    # manager.intercept_401 = false
-    # manager.default_strategies(scope: :user).unshift :some_external_strategy
-    manager.failure_app = TurboFailureApp
-  end
+  # config.warden do |manager|
+  #   manager.intercept_401 = false
+  #   manager.default_strategies(scope: :user).unshift :some_external_strategy
+  # end
 
   # ==> Mountable engine configurations
   # When using Devise inside an engine, let's call it `MyEngine`, and this engine
@@ -320,12 +328,48 @@ Devise.setup do |config|
   # The router that invoked `devise_for`, in the example above, would be:
   # config.router_name = :my_engine
 
+  # ==> Hotwire/Turbo configuration
+  # When using Devise with Hotwire/Turbo, the http status for error responses
+  # and some redirects must match the following. The default in Devise for existing
+  # apps is `200 OK` and `302 Found respectively`, but new apps are generated with
+  # these new defaults that match Hotwire/Turbo behavior.
+  # Note: These might become the new default in future versions of Devise.
+  config.responder.error_status = :unprocessable_entity
+  config.responder.redirect_status = :see_other
+
   # ==> OmniAuth
   # Add a new OmniAuth provider. Check the wiki for more information on setting
   # up on your models and hooks.
-
   config.omniauth :feishu, setup: FEISHU_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::Feishu
   config.omniauth :gitlab, setup: GITLAB_OMNIAUTH_SETUP
   config.omniauth :google_oauth2, setup: GOOGLE_OMNIAUTH_SETUP
-  config.omniauth :ldap, setup: LDAP_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::Ldap
+  config.omniauth :ldap, setup: LDAP_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::LDAP
+  config.omniauth :openid_connect, setup: OIDC_OMNIAUTH_SETUP
 end
+
+module SafeStoreLocation
+  MAX_LOCATION_SIZE = ActionDispatch::Cookies::MAX_COOKIE_SIZE - 1024
+
+  # This overrides Devise's method for extracting the path from the URL. We
+  # want to ensure the path to be stored in the cookie is not too long in
+  # order to avoid ActionDispatch::Cookies::CookieOverflow exception. If the
+  # session cookie (containing all the session data) is over 4 KB in length,
+  # it would lead to an exception if the cookie store is being used. This is
+  # a hard constraint set by ActionDispatch because some browsers do not allow
+  # cookies over 4 KB.
+  #
+  # Original code in Devise: https://github.com/heartcombo/devise/blob/main/lib/devise/controllers/store_location.rb#L56
+  def extract_path_from_location(location)
+    path = super
+    return path unless Rails.application.config.session_store == ActionDispatch::Session::CookieStore
+
+    # Allow 3 KB size for the path because there can be also some other
+    # session variables out there.
+    return path if path.bytesize <= MAX_LOCATION_SIZE
+
+    # For too long paths, remove the URL parameters
+    path.split('?').first
+  end
+end
+
+Devise::FailureApp.include SafeStoreLocation

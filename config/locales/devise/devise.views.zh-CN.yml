@@ -74,7 +74,7 @@ zh-CN:
         message: 由于多次登录失败，您的帐户已被锁定。
         subject: 帐户解锁信息
     omniauth_callbacks:
-      failure: 由于 %{reason}，无法从%{kind}获得授权。
+      failure: 基于 %{reason}，无法从%{kind}获得授权。
       success: 成功地从%{kind}获得授权。
     passwords:
       edit:
@@ -93,6 +93,7 @@ zh-CN:
     registrations:
       destroyed: 再见！您的帐户已成功注销。我们希望很快可以再见到您。
       edit:
+        danger_zone: 危险区域
         are_you_sure: 最后确认要注销自己的账户，您确定吗？
         cancel_my_account: 注销我的帐户
         currently_waiting_confirmation_for_email: 等待确认 %{email}
@@ -124,7 +125,7 @@ zh-CN:
         didn_t_receive_unlock_instructions: 没有收到解锁账号确认邮件?
         forgot_your_password: 忘记密码？
         sign_in: 登录账户
-        sign_in_with_provider: 通过%{provider}登录
+        sign_in_with_provider: '%{provider}登录'
         sign_up: 注册账户
       minimum_password_length: "（最少%{count}个字符）"
     unlocks:

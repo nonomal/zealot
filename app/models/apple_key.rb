@@ -2,33 +2,19 @@
 
 class AppleKey < ApplicationRecord
   has_one :team, class_name: 'AppleTeam', foreign_key: 'apple_key_id', dependent: :destroy
-  has_and_belongs_to_many :devices
-
-  # NOTE: to be or not to be?
-  # encrypts :private_key
+  has_many :apple_keys_devices, class_name: 'AppleKeyDevice'
+  has_many :devices, through: :apple_keys_devices
 
   validates :issuer_id, :key_id, :private_key, :filename, :checksum, presence: true
-  validates :checksum, uniqueness: true, on: :create
-  validate :private_key_format, on: :create
-  validate :appstoreconnect_api_role_permissions, on: :create
+  validates :checksum, uniqueness: true, on: :create, if: :requires_fields?
+  validate :private_key_format, on: :create, if: :requires_fields?
+  validate :appstoreconnect_api_role_permissions, on: :create, if: :requires_fields?
+  validate :distribution_certificate_exists, on: :create, if: :requires_fields?
 
-  before_validation :generate_checksum
-  after_save :create_relate_team
-  after_create :start_sync_device_job
+  before_create :generate_checksum
 
-  PRIVATE_KEY_HYPHENS = '-----'
-
-  def encrypted_private_key
-    @encrypted_private_key ||= ->() do
-      content = private_key.split("\n")
-                           .delete_if do |s|
-                              s.include?('PRIVATE KEY') &&
-                              s.start_with?(PRIVATE_KEY_HYPHENS) &&
-                              s.end_with?(PRIVATE_KEY_HYPHENS)
-                           end
-                           .join('')
-      "#{content[0..8]}********#{content[-8..-1]}"
-    end.call
+  def private_key_filename
+    @private_key_filename ||= "#{key_id}.key"
   end
 
   def last_synced_at
@@ -37,11 +23,10 @@ class AppleKey < ApplicationRecord
 
   def sync_devices
     response_devices = client.devices.all_pages(flatten: true)
-    logger.debug "Got #{response_devices.size} devices from apple key #{id}"
+    AppleKeyDevice.where(apple_key: self).delete_all
     response_devices.each do |response_device|
-      logger.debug "Device is: #{response_device.attributes}"
       Device.create_from_api(response_device) do |device|
-        devices << device unless devices.exists?(device.id)
+        devices << device
       end
     end
 
@@ -51,12 +36,22 @@ class AppleKey < ApplicationRecord
     false
   end
 
-  def register_device(udid, name = nil)
-    return device if (device = Device.find_by(udid: udid))
+  def register_device(udid, name = nil, platform = 'IOS')
+    remote_device = client.device(udid: udid)
+    db_device = Device.find_by(udid: udid)
+    return db_device if remote_device && db_device
 
-    response_device = client.create_device(udid, name).to_model
+    if remote_device && !db_device
+      devices << remote_device
+      return remote_device
+    end
+
+    response_device = client.create_device(udid, name, platform: platform).to_model
     Device.create_from_api(response_device) do |device|
       devices << device
+
+      # return value
+      device
     end
   rescue TinyAppstoreConnect::InvalidEntityError => e
     # Incorrect UDID format: An invalid value '00008020-001430D41A68002E1' was provided for the parameter 'udid'.
@@ -65,46 +60,53 @@ class AppleKey < ApplicationRecord
     message = e.errors[0]['detail']
     is_exists = message.include?('already exists')
 
-    # udid had registered, force sync device
+    # udid had registered, but not exists in zealot system, needs to force sync device
     if is_exists
       sync_devices
       return self
     end
 
+    invaild_device = Device.new
     # invaild udid
     if message.include?('invalid value')
       # This is never happen, never ever!
-      errors.add(:devices, :invalid_value, value: udid)
+      invaild_device.errors.add(:name, :invalid_value, value: udid)
     else
-      errors.add(:devices, :api, message: message)
+      invaild_device.errors.add(:name, :api, message: message)
     end
 
-    self
+    invaild_device
   rescue => e
     logger.error "Register device raise an exception: #{e}"
+    logger.error e.backtrace.join("\n")
 
     message = e.respond_to?(:errors) ? errors[0]['detail'] : e.message
-    errors.add(:devices, :unknown, message: message)
 
-    self
+    invaild_device = Device.new
+    invaild_device.errors.add(:name, :unknown, message: message)
+    invaild_device
   end
 
-  private
+  def update_device_name(device)
+    client.rename_device(device.name, id: device.device_id, udid: device.udid)
+  rescue TinyAppstoreConnect::InvalidEntityError => e
+    logger.error "Device may not exists or the other error in apple key #{id}: #{e}"
+  end
 
-  def create_relate_team
-    cert = client.distribution_certificates.to_model
-    logger.debug "Fetching distribution_certificates is #{cert.attributes}"
-    raise 'Not found cert, create it first' if cert.blank?
-
+  def sync_team
+    cert = apple_distribtion_certiticate
+    logger.debug "Fetching distribution_certificates is #{cert.name}"
     create_team(
       team_id: cert.team_id,
       name: cert.name
     )
   end
 
-  def start_sync_device_job
+  def sync_devices_job
     SyncAppleDevicesJob.perform_later(id)
   end
+
+  private
 
   def private_key_format
     OpenSSL::PKey.read(private_key)
@@ -116,18 +118,26 @@ class AppleKey < ApplicationRecord
   def appstoreconnect_api_role_permissions
     client.devices
   rescue TinyAppstoreConnect::InvalidUserCredentialsError
-    errors.add(:key_id, '用户身份认证失败，请重新检查各项参数是否正确')
+    errors.add(:key_id, :unauthorized)
   rescue TinyAppstoreConnect::ForbiddenError
-    errors.add(:key_id, '密钥权限太低，重新生成一个最低限度为【开发者】权限的密钥')
+    errors.add(:key_id, :forbidden)
   rescue => e
     logger.error "Throws an error: #{e.message}, with trace: #{e.backtrace.join("\n")}"
-    errors.add(:key_id, "未知错误 [#{e.class}]: #{e.message}")
+    errors.add(:key_id, :unknown, message: "[#{e.class}]: #{e.message}")
   end
 
-  def generate_checksum
-    return if private_key.blank?
+  def distribution_certificate_exists
+    if apple_distribtion_certiticate.blank?
+      errors.add(:issuer_id, :missing_distribution_certificate)
+    end
+  end
 
-    self.checksum = Digest::SHA1.hexdigest(private_key)
+  def apple_distribtion_certiticate
+    @apple_distribtion_certiticate ||= client.distribution_certificates.to_model
+  end
+
+  def requires_fields?
+    issuer_id.present? && key_id.present? || private_key.present?
   end
 
   def client
@@ -136,5 +146,11 @@ class AppleKey < ApplicationRecord
       key_id: key_id,
       private_key: private_key
     )
+  end
+
+  def generate_checksum
+    return if private_key.blank?
+
+    self.checksum = Digest::SHA1.hexdigest(private_key)
   end
 end

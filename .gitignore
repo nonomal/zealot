@@ -6,6 +6,7 @@ build_info/
 extensions/
 bundler/
 storage/
+bin/importmap
 
 # minimal Rails specific artifacts
 /config/master*.key
@@ -54,6 +55,7 @@ pickle-email-*.html
 # vscode
 .vscode
 .history
+*.breakpoints
 
 # if using bower-rails ignore default bower_components path bower.json files
 /vendor/assets/bower_components

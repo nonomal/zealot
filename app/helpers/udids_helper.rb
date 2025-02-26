@@ -2,12 +2,14 @@
 
 module UdidsHelper
   def install_qrcode_image_tag
-    if Setting.site_appearance != 'auto'
-      return image_tag qrcode_udid_index_path(size: :extra, theme: Setting.site_appearance)
+    if current_user&.appearance != 'auto' || Setting.site_appearance != 'auto'
+      theme = current_user&.appearance || Setting.site_appearance
+      return image_tag qrcode_udid_index_path(size: :extra, theme: theme)
     end
 
     content_tag(:picture) do
-      content_tag(:source, media: "(prefers-color-scheme: dark)", srcset: qrcode_udid_index_path(size: :extra, theme: :dark)) do
+      qrcode_uri = qrcode_udid_index_path(size: :extra, theme: :dark)
+      content_tag(:source, media: "(prefers-color-scheme: dark)", srcset: qrcode_uri) do
         image_tag qrcode_udid_index_path(size: :extra)
       end
     end

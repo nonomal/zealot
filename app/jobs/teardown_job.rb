@@ -7,8 +7,15 @@ class TeardownJob < ApplicationJob
     return unless file = determine_file!(release_id)
 
     metadata = TeardownService.new(file.path).call
+    unless metadata
+      logger.error "Unable to parse metadata with release: #{release_id}"
+      return
+    end
+
     metadata.update_attribute(:user_id, user_id) if user_id.present?
     update_release_resouces(release_id, metadata)
+  rescue AppInfo::UnknownFormatError
+    # ignore
   end
 
   private
@@ -18,7 +25,7 @@ class TeardownJob < ApplicationJob
 
     metadata.update_attribute(:release_id, release_id)
     release = release(id: release_id)
-    release.update(release_type: metadata.release_type)
+    release.update(release_type: metadata.release_type) if release.release_type.blank?
   end
 
   def determine_file!(release_id)

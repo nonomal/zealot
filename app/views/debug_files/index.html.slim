@@ -5,32 +5,31 @@
   = @title
 
 - content_for :section_rightpanel do
-  - if user_signed_in?
-    a.btn.btn-icon.btn-success href="#{new_debug_file_path}"
+  - if current_user&.manage?
+    a.btn.btn-success href="#{new_debug_file_path}"
       i.icon.far.fa-plus-square
       = t('debug_files.index.upload')
 
 .row
-  .col-md-12
-    - if DebugFile.count > 0
-      - @apps.each do |app|
-        .card
-          .card-header
-            h3.card-title
-            = app.name
-            .card-tools
-              ul.nav.nav-pills.ml-auto
-                - DebugFile.device_types.each_with_index do |(value, name), i|
-                  li.nav-item
-                    a.nav-link class="#{i == 0 ? 'active' : ''}" data-toggle="tab" href="#tab-#{app.id}-#{value.downcase}" = name
-          .card-body.p-0
-            .tab-content
-              - DebugFile.device_types.each_with_index do |(value, name), i|
-                == render 'debug_file', app: app, value: value, name: name, i: i
-    - else
+  - if @apps.present?
+    - @apps.each_with_index do |app, i|
+      .col-md-3
+        .card.widget-app
+          .card-body.p-0.pt-3
+            .text-center
+              = app_icon(app.recently_release, class: 'app-icon elevation-1 rounded-circle')
+            h3.profile-username.text-center
+              = app.name
+            .d-flex.flex-column.pt-2
+              .border-top.py-2.px-3
+                b = link_to t('.android_count'), device_app_debug_files_path(app, 'Android')
+                span.float-end = app.android_debug_files.count
+              .border-top.py-2.px-3
+                b = link_to t('.ios_count'), device_app_debug_files_path(app, 'iOS')
+                span.float-end = app.ios_debug_files.count
+  - else
+    .col-md-12
       .card.card-outline.card-warning
         .card-header.card-border
           h3.card-title = t('debug_files.index.not_found.title')
         .card-body = t('debug_files.index.not_found.body_html')
-
-  == render 'help'
